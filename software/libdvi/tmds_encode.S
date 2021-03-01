@@ -174,6 +174,78 @@ decl_func tmds_encode_loop_8bpp_leftshift
 	pop {r4, r5, r6, r7, pc}
 
 // ----------------------------------------------------------------------------
+// x8 scale encoders for RGB (pixel-doubling + 4xscale)
+// r0: Input buffer (word-aligned)
+// r1: Output buffer (word-aligned)
+// r2: Input size (pixels)
+decl_func tmds_encode_x8scale_loop_16bpp
+	push {r4, r5, r6, r7, lr}
+	lsls r2, #5
+	add r2, r1
+	mov ip, r2
+	ldr r2, =(SIO_BASE + SIO_INTERP0_ACCUM0_OFFSET)
+	b 2f
+.align 2
+1:
+	ldmia r0!, {r4}
+	str r4, [r2, #ACCUM0_OFFS]
+	ldr r4, [r2, #PEEK0_OFFS]
+	mov r5, r4
+	ldmia r5, {r5, r6}
+	stmia r1!, {r5, r6}
+	stmia r1!, {r5, r6}
+	stmia r1!, {r5, r6}
+	stmia r1!, {r5, r6}
+	ldr r4, [r2, #PEEK1_OFFS]
+	mov r5, r4
+	ldmia r5, {r5, r6}
+	stmia r1!, {r5, r6}
+	stmia r1!, {r5, r6}
+	stmia r1!, {r5, r6}
+	stmia r1!, {r5, r6}
+2:
+	cmp r1, ip
+	bne 1b
+	pop {r4, r5, r6, r7, pc}
+
+// Same as above, but scale data to make up for lack of left shift
+// in interpolator (costs 1 cycle per 2 pixels)
+// r0: Input buffer (word-aligned)
+// r1: Output buffer (word-aligned)
+// r2: Input size (pixels)
+// r3: Left shift amount
+decl_func tmds_encode_x8scale_loop_16bpp_leftshift
+	push {r4, r5, r6, r7, lr}
+	lsls r2, #5
+	add r2, r1
+	mov ip, r2
+	ldr r2, =(SIO_BASE + SIO_INTERP0_ACCUM0_OFFSET)
+	b 2f
+.align 2
+1:
+	ldmia r0!, {r4}
+	lsls r4, r3
+	str r4, [r2, #ACCUM0_OFFS]
+	ldr r4, [r2, #PEEK0_OFFS]
+	mov r5, r4
+	ldmia r5, {r5, r6}
+	stmia r1!, {r5, r6}
+	stmia r1!, {r5, r6}
+	stmia r1!, {r5, r6}
+	stmia r1!, {r5, r6}
+	ldr r4, [r2, #PEEK1_OFFS]
+	mov r5, r4
+	ldmia r5, {r5, r6}
+	stmia r1!, {r5, r6}
+	stmia r1!, {r5, r6}
+	stmia r1!, {r5, r6}
+	stmia r1!, {r5, r6}
+2:
+	cmp r1, ip
+	bne 1b
+	pop {r4, r5, r6, r7, pc}
+
+// ----------------------------------------------------------------------------
 // Fast 1bpp black/white encoder (full res)
 
 // Taking the encoder from DVI spec, with initial balance 0:

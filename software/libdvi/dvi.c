@@ -8,7 +8,7 @@
 #include "tmds_encode.h"
 
 #ifndef DVI_VERTICAL_REPEAT
-#define DVI_VERTICAL_REPEAT 2
+#define DVI_VERTICAL_REPEAT 8
 #endif
 
 #ifndef DVI_N_TMDS_BUFFERS
@@ -157,6 +157,22 @@ static inline void __dvi_func_x(_dvi_prepare_scanline_16bpp)(struct dvi_inst *in
 	queue_add_blocking_u32(&inst->q_tmds_valid, &tmdsbuf);
 }
 
+static inline void __dvi_func_x(_dvi_prepare_x8scale_scanline_16bpp)(struct dvi_inst *inst, uint32_t *scanbuf) {
+	uint32_t *tmdsbuf;
+	queue_remove_blocking_u32(&inst->q_tmds_free, &tmdsbuf);
+	uint pixwidth = inst->timing->h_active_pixels;
+	const uint red_msb   = 15;
+	const uint red_lsb   = 11;
+	const uint green_msb = 10;
+	const uint green_lsb = 5;
+	const uint blue_msb  = 4;
+	const uint blue_lsb  = 0;
+	tmds_encode_x8scale_data_channel_16bpp(scanbuf, tmdsbuf, pixwidth / 8, blue_msb, blue_lsb);
+	tmds_encode_x8scale_data_channel_16bpp(scanbuf, tmdsbuf + pixwidth, pixwidth / 8, green_msb, green_lsb);
+	tmds_encode_x8scale_data_channel_16bpp(scanbuf, tmdsbuf + 2 * pixwidth, pixwidth / 8, red_msb, red_lsb);
+	queue_add_blocking_u32(&inst->q_tmds_valid, &tmdsbuf);
+}
+
 // "Worker threads" for TMDS encoding (core enters and never returns, but still handles IRQs)
 
 // Version where each record in q_colour_valid is one scanline:
@@ -182,6 +198,22 @@ void __dvi_func(dvi_scanbuf_main_16bpp)(struct dvi_inst *inst) {
 		uint32_t *scanbuf;
 		queue_remove_blocking_u32(&inst->q_colour_valid, &scanbuf);
 		_dvi_prepare_scanline_16bpp(inst, scanbuf);
+		queue_add_blocking_u32(&inst->q_colour_free, &scanbuf);
+		++y;
+		if (y == inst->timing->v_active_lines) {
+			y = 0;
+		}
+	}
+	__builtin_unreachable();
+}
+
+// Ugh copy/paste but it lets us garbage collect the TMDS stuff that is not being used from .scratch_x
+void __dvi_func(dvi_scanbuf_x8scale_main_16bpp)(struct dvi_inst *inst) {
+	uint y = 0;
+	while (1) {
+		uint32_t *scanbuf;
+		queue_remove_blocking_u32(&inst->q_colour_valid, &scanbuf);
+		_dvi_prepare_x8scale_scanline_16bpp(inst, scanbuf);
 		queue_add_blocking_u32(&inst->q_colour_free, &scanbuf);
 		++y;
 		if (y == inst->timing->v_active_lines) {
